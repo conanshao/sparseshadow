@@ -104,9 +104,9 @@ void VTGenerator::Init()
 
 	pDevice->CreateDepthStencilSurface(128, 128, D3DFMT_D24X8, D3DMULTISAMPLE_NONE, 0, true, &pNewDS, NULL);
 
-	D3DXCreateTeapot(pDevice, &mesh, NULL);
+	//D3DXCreateTeapot(pDevice, &mesh, NULL);
 
-	//D3DXCreateBox(pDevice, 2.0f, 2.0f, 2.0f, &mesh, NULL);
+	D3DXCreateBox(pDevice, 2.0f, 2.0f, 2.0f, &mesh, NULL);
 
 	pOrinRT = nullptr;
 	pOrinDS = nullptr;
@@ -116,7 +116,7 @@ void VTGenerator::InitPos()
 {
 	m_center = D3DXVECTOR3(0.0f, 0.f, 0.0f);
 
-	m_lightdir = D3DXVECTOR3(1.0f, 1.0f, 0.0f);
+	m_lightdir = D3DXVECTOR3(1.0f, 1.0f, 1.0f);
 
 	D3DXVec3Normalize(&m_lightdir, &m_lightdir);
 	
@@ -162,7 +162,7 @@ void VTGenerator::updateTexture(int texpage, int textadr)
 	int ybias = bias / 4096;
 
 	float basecellsize = 1.0;
-	float texhalfsize = 256.0f;
+	float texhalfsize = 512.0f;
 
 	float levelsize = basecellsize * (1 << level);
 	float halfesize = levelsize / 2.0f;
@@ -178,6 +178,11 @@ void VTGenerator::updateTexture(int texpage, int textadr)
 	D3DXVECTOR3 veye = vat + m_lightdir * 1000.0f;
 	
 	D3DXVECTOR3 vup = m_up;
+
+	D3DXVECTOR3 plane;
+	plane.z = veye.z;
+	plane.y = 0.0f;
+	plane.x = veye.x - veye.y * (veye.x - vat.x) / (veye.y - vat.y);
 
 	D3DXMatrixLookAtLH(&mview, &veye, &vat, &vup);
 

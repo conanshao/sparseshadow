@@ -228,7 +228,7 @@ void DrawQuad(IDirect3DDevice9* pDevice)
 		D3DXVECTOR2 uv;
 	};
 
-	float quadsize = 128.0f;
+	float quadsize = 256.0f;
 
 	QuadVertex v[4];
 
@@ -316,7 +316,9 @@ HRESULT CALLBACK OnD3D9CreateDevice( IDirect3DDevice9* pd3dDevice, const D3DSURF
     g_Camera.SetViewParams( &vecEye, &vecAt );
 	g_Camera.SetScalers(0.01f, 50.0f);
 
-	D3DXCreateTeapot(pd3dDevice, &mesh, NULL);
+	//D3DXCreateTeapot(pd3dDevice, &mesh, NULL);
+	
+	D3DXCreateBox(pd3dDevice, 2.0f, 2.0f, 2.0f, &mesh, NULL);
 
 	for (int i = 0; i < 64; i++)
 		for (int j = 0; j < 64; j++)
@@ -716,8 +718,20 @@ void CALLBACK OnD3D9FrameRender( IDirect3DDevice9* pd3dDevice, double fTime, flo
 		D3DXHANDLE hcache = g_pEffect9->GetParameterByName(NULL, "CacheTexture");
 		g_pEffect9->SetTexture(hcache, vtgen->getTex());
 
+
 		g_pEffect9->BeginPass(3);
 		DrawQuad(pd3dDevice);
+		g_pEffect9->EndPass();
+
+		g_pEffect9->BeginPass(5);
+		for (int i = 0; i < 64 * 64; i++)
+		{
+			D3DXVECTOR3 pos = PosArray[i];
+
+			g_pEffect9->SetRawValue(g_hBias, &pos, 0, sizeof(D3DXVECTOR3));
+			g_pEffect9->CommitChanges();
+			mesh->DrawSubset(0);
+		}
 		g_pEffect9->EndPass();
 
 		g_pEffect9->End();
@@ -748,10 +762,21 @@ void CALLBACK OnD3D9FrameRender( IDirect3DDevice9* pd3dDevice, double fTime, flo
 		pd3dDevice->SetRenderTarget(0, pOldRT);
 		pd3dDevice->SetDepthStencilSurface(pOldDS);
 		pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_ARGB(0, 45, 50, 170), 1.0f, 0);
-		g_pEffect9->BeginPass(1);
-
 		
+		
+		g_pEffect9->BeginPass(1);
 		DrawQuad(pd3dDevice);
+		g_pEffect9->EndPass();
+
+		g_pEffect9->BeginPass(5);
+		for (int i = 0; i < 64 * 64; i++)
+		{
+			D3DXVECTOR3 pos = PosArray[i];
+
+			g_pEffect9->SetRawValue(g_hBias, &pos, 0, sizeof(D3DXVECTOR3));
+			g_pEffect9->CommitChanges();
+			mesh->DrawSubset(0);
+		}
 		g_pEffect9->EndPass();
 
 		g_pEffect9->End();

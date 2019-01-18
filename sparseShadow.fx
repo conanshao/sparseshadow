@@ -69,9 +69,9 @@ sampler_state
 	MipFilter = NONE;
 	MinFilter = LINEAR;
 	MagFilter = LINEAR;
-	addressu = border;
-	addressv = border;
-	bordercolor = 0xffffffff;
+	//addressu = clamp;
+	//addressv = clamp;
+	//bordercolor = 0xffffffff;
 
 };
 
@@ -248,6 +248,30 @@ PS_OUTPUT RenderFinalPS(VS_OUTPUT In)
 }
 
 
+VS_OUTPUT RendernormalVS(float4 vPos : POSITION,
+	float3 vNormal : NORMAL,
+	float2 vTexCoord0 : TEXCOORD0)
+{
+	VS_OUTPUT Output;
+
+	// Transform the position from object space to homogeneous projection space
+	Output.Position = mul(vPos + float4(biaspos, 0.0f), g_mWorldViewProjection);
+	// Just copy the texture coordinate through
+	Output.TextureUV = mul(vPos, g_mShadowM);
+
+	return Output;
+}
+
+
+PS_OUTPUT RenderScenePS(VS_OUTPUT In)
+{
+	PS_OUTPUT Output;
+
+	
+	Output.RGBColor =  0.4f;
+	return Output;
+}
+
 VS_COLOR RenderPointVS(float4 vPos : POSITION,
 	float4 vColor : COLOR0)
 {
@@ -313,6 +337,7 @@ technique RenderScene
 		PixelShader = compile ps_3_0 RenderFinalPS();
 	}
 
+	
 	pass P4
 	{
 		//colorwriteenable = 0x0f;
@@ -321,4 +346,13 @@ technique RenderScene
 		VertexShader = compile vs_3_0 RenderPointVS();
 		PixelShader = compile ps_3_0 RenderPointPS();
 	}
+
+	pass P5
+	{
+		//colorwriteenable = 0x0f;
+		zenable = true;
+		VertexShader = compile vs_3_0 RendernormalVS();
+		PixelShader = compile ps_3_0 RenderScenePS();
+	}
+
 }
