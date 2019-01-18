@@ -46,7 +46,7 @@ sampler_state
 	MipFilter = POINT;
 	MinFilter = POINT;
 	MagFilter = POINT;
-	MIPMAPLODBIAS = 3;
+	MIPMAPLODBIAS = 4;
 };
 
 
@@ -58,7 +58,7 @@ sampler_state
 	MipFilter = POINT;
 	MinFilter = POINT;
 	MagFilter = POINT;
-	MIPMAPLODBIAS = 6;
+	MIPMAPLODBIAS = 7;
 };
 
 texture CacheTexture;

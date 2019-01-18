@@ -26,7 +26,7 @@ VTGenerator::VTGenerator(IDirect3DDevice9* pD3DDevice)
 	for (int i = 0; i < 64; i++)
 		for (int j = 0; j < 64; j++)
 		{
-			PosArray[i + j * 64] = D3DXVECTOR3((i - 32)*4.0f, 1.0f, (j - 32)*4.0f);
+			PosArray[i + j * 64] = D3DXVECTOR3((i - 32)*8.0f, 1.0f, (j - 32)*8.0f);
 		}
 
 
@@ -92,33 +92,7 @@ void VTGenerator::shutdown()
 	SAFE_RELEASE(pOrinDS);
 }
 
-void VTGenerator::DrawFullScreenQuad()
-{
-	struct QuadVertex
-	{
-		D3DXVECTOR3 pos;
-		D3DXVECTOR2 uv;
-	};
 
-	QuadVertex v[4];
-
-	v[0].pos = D3DXVECTOR3(-512.0f,0.0f, -512.0f);
-	v[0].uv = D3DXVECTOR2(0.0f, 1.0f);
-
-	v[1].pos = D3DXVECTOR3(-512.0f, 0.0f, 512.0f);
-	v[1].uv = D3DXVECTOR2(0.0f, 0.0f);
-
-	v[2].pos = D3DXVECTOR3(512.0f, 0.0f, -512.0f);
-	v[2].uv = D3DXVECTOR2(1.0f, 1.0f);
-
-	v[3].pos = D3DXVECTOR3(512.0f, 0.0f, 512.0f);
-	v[3].uv = D3DXVECTOR2(1.0f, 0.0f);
-
-
-	pDevice->SetFVF(D3DFVF_XYZ | D3DFVF_TEX1);
-	pDevice->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, (void*)v, sizeof(QuadVertex));
-
-}
 
 void VTGenerator::Init()
 {
@@ -187,7 +161,7 @@ void VTGenerator::updateTexture(int texpage, int textadr)
 	int xbias = bias % 4096;
 	int ybias = bias / 4096;
 
-	float basecellsize = 0.5f;
+	float basecellsize = 1.0;
 	float texhalfsize = 256.0f;
 
 	float levelsize = basecellsize * (1 << level);
@@ -201,7 +175,7 @@ void VTGenerator::updateTexture(int texpage, int textadr)
 
 	D3DXVECTOR3 vat = m_center + m_left*(xbias*levelsize - texhalfsize + halfesize) + m_up*(ybias*levelsize - texhalfsize + halfesize);
 
-	D3DXVECTOR3 veye = vat - m_lightdir * 1000.0f;
+	D3DXVECTOR3 veye = vat + m_lightdir * 1000.0f;
 	
 	D3DXVECTOR3 vup = m_up;
 

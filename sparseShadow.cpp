@@ -21,7 +21,7 @@
 //--------------------------------------------------------------------------------------
 // Global variables
 //--------------------------------------------------------------------------------------
-CModelViewerCamera          g_Camera;               // A model viewing camera
+CFirstPersonCamera          g_Camera;               // A model viewing camera
 CDXUTDialogResourceManager  g_DialogResourceManager; // manager for shared resources of dialogs
 CD3DSettingsDlg             g_SettingsDlg;          // Device settings dialog
 CDXUTTextHelper*            g_pTxtHelper = NULL;
@@ -314,13 +314,14 @@ HRESULT CALLBACK OnD3D9CreateDevice( IDirect3DDevice9* pd3dDevice, const D3DSURF
     D3DXVECTOR3 vecEye( 0.0f, 2.0f, -5.0f );
     D3DXVECTOR3 vecAt ( 0.0f, 0.0f, -0.0f );
     g_Camera.SetViewParams( &vecEye, &vecAt );
+	g_Camera.SetScalers(0.01f, 50.0f);
 
 	D3DXCreateTeapot(pd3dDevice, &mesh, NULL);
 
 	for (int i = 0; i < 64; i++)
 		for (int j = 0; j < 64; j++)
 		{
-			PosArray[i + j*64] = D3DXVECTOR3((i - 32)*4.0f, 1.0f, (j - 32)*4.0f);
+			PosArray[i + j*64] = D3DXVECTOR3((i - 32)*8.0f, 1.0f, (j - 32)*8.0f);
 		}
 
 	vtgen = new VTGenerator(pd3dDevice);
@@ -393,7 +394,7 @@ HRESULT CALLBACK OnD3D9ResetDevice( IDirect3DDevice9* pd3dDevice,
     // Setup the camera's projection parameters
     float fAspectRatio = pBackBufferSurfaceDesc->Width / ( FLOAT )pBackBufferSurfaceDesc->Height;
     g_Camera.SetProjParams( D3DX_PI / 4, fAspectRatio, 0.1f, 1000.0f );
-    g_Camera.SetWindow( pBackBufferSurfaceDesc->Width, pBackBufferSurfaceDesc->Height );
+    //g_Camera.SetWindow( pBackBufferSurfaceDesc->Width, pBackBufferSurfaceDesc->Height );
 
     g_HUD.SetLocation( pBackBufferSurfaceDesc->Width - 170, 0 );
     g_HUD.SetSize( 170, 170 );
@@ -661,12 +662,12 @@ void CALLBACK OnD3D9FrameRender( IDirect3DDevice9* pd3dDevice, double fTime, flo
         mProj = *g_Camera.GetProjMatrix();
         mView = *g_Camera.GetViewMatrix();
 
-        mWorldViewProjection = mWorld * mView * mProj;
+        mWorldViewProjection =   mView * mProj;
 
         // Update the effect's variables.  Instead of using strings, it would 
         // be more efficient to cache a handle to the parameter by calling 
         // ID3DXEffect::GetParameterByName
-		float size = 512.0f;
+		float size = 1024.0f;
 
 		D3DXVECTOR3 eye = D3DXVECTOR3(size, 1.0f + size, size);
 		D3DXVECTOR3 at = D3DXVECTOR3(0.0f, 1.0f, 0.0f);
