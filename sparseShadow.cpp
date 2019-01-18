@@ -11,6 +11,7 @@
 #include "SDKmisc.h"
 #include "SDKmesh.h"
 #include "resource.h"
+#include "TexGenerator.h"
 
 //#define DEBUG_VS   // Uncomment this line to debug D3D9 vertex shaders 
 //#define DEBUG_PS   // Uncomment this line to debug D3D9 pixel shaders 
@@ -37,6 +38,15 @@ D3DXHANDLE					g_hmShadow;
 D3DXHANDLE					g_hShadowTex;
 D3DXHANDLE				    g_hBias;
 
+IDirect3DTexture9* newRT = NULL;
+IDirect3DTexture9* sysRT = NULL;
+VTGenerator* vtgen = NULL;
+ID3DXMesh* mesh = NULL;
+IDirect3DTexture9* projMap = NULL;
+
+
+
+
 //--------------------------------------------------------------------------------------
 // UI control IDs
 //--------------------------------------------------------------------------------------
@@ -44,8 +54,6 @@ D3DXHANDLE				    g_hBias;
 #define IDC_TOGGLEREF           2
 #define IDC_CHANGEDEVICE        3
 
-ID3DXMesh* mesh = NULL;
-IDirect3DTexture9* shadowMap = NULL;
 
 //--------------------------------------------------------------------------------------
 // Forward declarations 
@@ -241,6 +249,18 @@ void DrawQuad(IDirect3DDevice9* pDevice)
 	pDevice->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, (void*)v, sizeof(QuadVertex));
 }
 
+D3DXVECTOR3 PosArray[64 * 64];
+
+
+uint32_t * indirectTexData[11];
+IDirect3DTexture9* pFeedBackTex;
+IDirect3DTexture9* pIndirectMap;
+IDirect3DTexture9* pTestTex;
+
+IDirect3DTexture9* indirectMap;
+
+IDirect3DSurface9* pIndirectRT[11];
+
 //--------------------------------------------------------------------------------------
 // Create any D3D9 resources that will live through a device reset (D3DPOOL_MANAGED)
 // and aren't tied to the back buffer size
@@ -291,17 +311,67 @@ HRESULT CALLBACK OnD3D9CreateDevice( IDirect3DDevice9* pd3dDevice, const D3DSURF
 	g_hBias = g_pEffect9->GetParameterByName(NULL, "biaspos");
     
     // Setup the camera's view parameters
-    D3DXVECTOR3 vecEye( 0.0f, 0.0f, -5.0f );
+    D3DXVECTOR3 vecEye( 0.0f, 2.0f, -5.0f );
     D3DXVECTOR3 vecAt ( 0.0f, 0.0f, -0.0f );
     g_Camera.SetViewParams( &vecEye, &vecAt );
 
 	D3DXCreateTeapot(pd3dDevice, &mesh, NULL);
 
+	for (int i = 0; i < 64; i++)
+		for (int j = 0; j < 64; j++)
+		{
+			PosArray[i + j*64] = D3DXVECTOR3((i - 32)*4.0f, 1.0f, (j - 32)*4.0f);
+		}
+
+	vtgen = new VTGenerator(pd3dDevice);
+
+
+	pd3dDevice->CreateTexture(1024, 1024, 0, 0, D3DFMT_A2R10G10B10, D3DPOOL_MANAGED, &pFeedBackTex, NULL);
+
+	pd3dDevice->CreateTexture(1024, 1024, 0, 0, D3DFMT_X8R8G8B8, D3DPOOL_MANAGED, &pIndirectMap, NULL);
+
+	int levelcount = pFeedBackTex->GetLevelCount();
+
+
+	for (uint64_t level = 0; level < 11; level++)
+	{
+		D3DLOCKED_RECT rect;
+
+		pFeedBackTex->LockRect(level, &rect, NULL, 0);
+
+		uint32_t* ptexdata = (uint32_t*)rect.pBits;
+
+		int mipsize = 1024 >> level;
+		for (uint32_t j = 0; j < mipsize; j++)
+			for (uint32_t i = 0; i < mipsize; i++)
+			{
+				ptexdata[i + j * mipsize] = (level << 22) | (i << 12) | (j << 2);
+			}
+
+		pFeedBackTex->UnlockRect(level);
+
+	}
+
+	D3DXHANDLE hindirect = g_pEffect9->GetParameterByName(NULL, "indirectTex");
+	g_pEffect9->SetTexture(hindirect, pFeedBackTex);
+
+	for (int i = 0; i < 11; i++)
+	{
+
+		int texwidth = 1024 >> i;
+
+		indirectTexData[i] = new uint32_t[texwidth*texwidth];
+
+		memset(indirectTexData[i], 0xffffffff, sizeof(uint32_t)*texwidth*texwidth);
+
+	}
+
     return S_OK;
 }
 
 IDirect3DSurface9* gRT = NULL;
-
+IDirect3DSurface9* gDS = NULL;
+int scale = 8;
 //--------------------------------------------------------------------------------------
 // Create any D3D9 resources that won't live through a device reset (D3DPOOL_DEFAULT) 
 // or that are tied to the back buffer size 
@@ -333,11 +403,26 @@ HRESULT CALLBACK OnD3D9ResetDevice( IDirect3DDevice9* pd3dDevice,
 
 	int depthsize = 4096;
 
-	pd3dDevice->CreateTexture(depthsize, depthsize, 1, D3DUSAGE_DEPTHSTENCIL, D3DFMT_D24X8, D3DPOOL_DEFAULT, &shadowMap, NULL);
+	pd3dDevice->CreateTexture(depthsize, depthsize, 1, D3DUSAGE_RENDERTARGET, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &projMap, NULL);
 
-	g_pEffect9->SetTexture(g_hShadowTex, shadowMap);
+	projMap->GetSurfaceLevel(0, &gRT);
+
+	g_pEffect9->SetTexture(g_hShadowTex, projMap);
 	
-	pd3dDevice->CreateRenderTarget(depthsize, depthsize, D3DFMT_X8R8G8B8, D3DMULTISAMPLE_NONE, 0, false, &gRT, NULL);
+	pd3dDevice->CreateDepthStencilSurface(depthsize, depthsize, D3DFMT_D24X8, D3DMULTISAMPLE_NONE, 0, true,&gDS, NULL);
+
+
+	D3DXCreateTexture(pd3dDevice, pBackBufferSurfaceDesc->Width / scale, pBackBufferSurfaceDesc->Height / scale, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A2R10G10B10, D3DPOOL_DEFAULT, &newRT);
+	
+	D3DXCreateTexture(pd3dDevice, 1024, 1024, 0, D3DUSAGE_RENDERTARGET, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &indirectMap);
+
+	for (int level = 0; level < 11; level++)
+	{
+		indirectMap->GetSurfaceLevel(level, &pIndirectRT[level]);
+	}
+
+
+	D3DXCreateTexture(pd3dDevice, pBackBufferSurfaceDesc->Width / scale, pBackBufferSurfaceDesc->Height / scale, 1, 0, D3DFMT_A2R10G10B10, D3DPOOL_SYSTEMMEM, &sysRT);
 
     return S_OK;
 }
@@ -352,6 +437,200 @@ void CALLBACK OnFrameMove( double fTime, float fElapsedTime, void* pUserContext 
     g_Camera.FrameMove( fElapsedTime );
 }
 
+struct Datastr
+{
+	int visit;
+	int xbias;
+	int ybias;
+	int level;
+
+};
+
+Datastr pageindexVisit[1024];
+
+
+struct PointVertex
+{
+	D3DXVECTOR3 pos;
+	DWORD color;
+};
+
+PointVertex PointArray[10][512];
+int vertexnum[10];
+
+void updateIndirTex(IDirect3DDevice9* pdevice)
+{
+	pdevice->SetFVF(D3DFVF_XYZ | D3DFVF_DIFFUSE);
+	for (int level = 9; level >= 0; level--)
+	{
+		if (vertexnum[level] > 0)
+		{
+			pdevice->SetRenderTarget(0, pIndirectRT[level]);
+			pdevice->DrawPrimitiveUP(D3DPT_POINTLIST, vertexnum[level], PointArray[level], sizeof(PointVertex));
+		}
+	}
+}
+
+void InitProcessTex()
+{
+	static bool init = false;
+
+	if (init == false)
+	{
+		for (int i = 0; i < 1024; i++)
+		{
+			pageindexVisit[i].visit = -1;
+		}
+
+		int pageindex = vtgen->getPageIndex();
+
+		int xpage = pageindex % 32;
+		int ypage = pageindex / 32;
+		int compindex = 10 << 16 | (xpage << 8) | ypage;
+
+		pageindexVisit[0].level = 10;
+		pageindexVisit[0].xbias = 0;
+		pageindexVisit[0].ybias = 0;
+		pageindexVisit[0].visit = 0;
+
+		int texadr = (10 << 24) | (0 + 0 * 4096);
+
+		vtgen->updateTexture(pageindex, texadr);
+
+		indirectTexData[10][0] = compindex;
+
+		init = true;
+	}
+
+}
+
+
+IDirect3DSurface9* psysSurf = NULL;
+void ProcessFeedback(IDirect3DDevice9* pDevice)
+{
+
+	IDirect3DSurface9* pRT;
+	IDirect3DSurface9* pOldRT;
+
+	newRT->GetSurfaceLevel(0, &pRT);
+	pDevice->GetRenderTarget(0, &pOldRT);
+
+	pDevice->SetRenderTarget(0, pRT);
+	pDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_ARGB(255, 255, 255, 255), 1.0f, 0);
+
+	g_pEffect9->BeginPass(2);
+	DrawQuad(pDevice);
+	g_pEffect9->EndPass();
+
+	pDevice->SetRenderTarget(0, pOldRT);
+
+	if (psysSurf == nullptr)
+	{
+		sysRT->GetSurfaceLevel(0, &psysSurf);
+	}
+
+	for (int i = 0; i < 10; i++)
+	{
+		vertexnum[i] = 0;
+	}
+
+	pDevice->GetRenderTargetData(pRT, psysSurf);
+
+	InitProcessTex();
+
+	D3DSURFACE_DESC desc;
+	psysSurf->GetDesc(&desc);
+
+	D3DLOCKED_RECT rect;
+	psysSurf->LockRect(&rect, NULL, D3DLOCK_READONLY);
+	uint32_t* pfeedbackdata = (uint32_t *)rect.pBits;
+
+	for (int i = 1; i < 1024; i++)
+	{
+		if (pageindexVisit[i].visit != -1)
+		{
+			pageindexVisit[i].visit++;
+		}
+
+		if (pageindexVisit[i].visit >= 3)
+		{
+			vtgen->recycleIndex(i);
+			pageindexVisit[i].visit = -1;
+			int level = pageindexVisit[i].level;
+			int xbias = pageindexVisit[i].xbias;
+			int ybias = pageindexVisit[i].ybias;
+
+			int texsize = 1024 >> level;
+			indirectTexData[level][xbias + ybias * texsize] = 0xffffffff;
+
+			int& levelindex = vertexnum[level];
+			PointArray[level][levelindex].pos = D3DXVECTOR3(xbias, ybias, level);
+			PointArray[level][levelindex++].color = 0;
+		}
+	}
+
+	int countindex = 0;
+	for (int i = 0; i < desc.Width*desc.Height; i++)
+	{
+		if (pfeedbackdata[i] != 0xffffffff)
+		{
+			int level = pfeedbackdata[i] >> 22;
+			int xbias = (pfeedbackdata[i] & 0x003ff000) >> 12;
+			int ybias = (pfeedbackdata[i] & 0x00000ffc) >> 2;
+			int texadr = (level << 24) | (xbias + ybias * 4096);
+
+			int texsize = 1024 >> level;
+
+			uint32_t& indirectData = indirectTexData[level][xbias + ybias * texsize];
+			uint32_t oldlevel = indirectData >> 16;
+			if (oldlevel != level)
+			{
+				int pageindex = vtgen->getPageIndex();
+
+				if (pageindex == -1)
+				{
+					assert(0);
+				}
+
+				int xpage = pageindex % 32;
+				int ypage = pageindex / 32;
+
+				int compindex = level << 16 | (xpage << 8) | ypage;
+				indirectData = compindex;
+
+				pageindexVisit[pageindex].visit = 0;
+				pageindexVisit[pageindex].level = level;
+				pageindexVisit[pageindex].xbias = xbias;
+				pageindexVisit[pageindex].ybias = ybias;
+
+				vtgen->updateTexture(pageindex, texadr);
+
+				int& levelindex = vertexnum[level];
+				PointArray[level][levelindex].pos = D3DXVECTOR3(xbias, ybias, level);
+				PointArray[level][levelindex++].color = compindex;
+				countindex++;
+			}
+			else
+			{
+				int pageindex = ((indirectData & 0x0000ff00) >> 8) | (indirectData & 0x000000ff) << 5;
+				pageindexVisit[pageindex].visit = 0;
+
+			}
+		}
+	}
+
+	psysSurf->UnlockRect();
+
+	g_pEffect9->BeginPass(4);
+	updateIndirTex(pDevice);
+	g_pEffect9->EndPass();
+
+	
+	pDevice->SetRenderTarget(0, pOldRT);
+	SAFE_RELEASE(pRT);
+	SAFE_RELEASE(pOldRT);
+
+}
 
 //--------------------------------------------------------------------------------------
 // Render the scene using the D3D9 device
@@ -399,7 +678,7 @@ void CALLBACK OnD3D9FrameRender( IDirect3DDevice9* pd3dDevice, double fTime, flo
 		D3DXMATRIX shadowviewproj;
 		
 		D3DXMatrixLookAtLH(&shadowview, &eye, &at, &up);
-		D3DXMatrixOrthoLH(&shadowproj, size, size, 0.1f, 1024.0f);
+		D3DXMatrixOrthoLH(&shadowproj, size, size, 1.0f, 5000.0f);
 		shadowviewproj = shadowview * shadowproj;
 
 		D3DXMATRIX shadowm;
@@ -420,25 +699,48 @@ void CALLBACK OnD3D9FrameRender( IDirect3DDevice9* pd3dDevice, double fTime, flo
 		pd3dDevice->GetRenderTarget(0, &pOldRT);
 		pd3dDevice->GetDepthStencilSurface(&pOldDS);
 		IDirect3DSurface9* pDS;
-		shadowMap->GetSurfaceLevel(0, &pDS);
+		projMap->GetSurfaceLevel(0, &pDS);
+
+#define TEST 1
+#if TEST
+		g_pEffect9->Begin(NULL, 0);
+		ProcessFeedback(pd3dDevice);
+
+		pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_ARGB(0, 45, 50, 170), 1.0f, 0);
+		//update indirect tex
+
+		D3DXHANDLE hheight = g_pEffect9->GetParameterByName(NULL, "indirectMap");
+		g_pEffect9->SetTexture(hheight, indirectMap);
+
+		D3DXHANDLE hcache = g_pEffect9->GetParameterByName(NULL, "CacheTexture");
+		g_pEffect9->SetTexture(hcache, vtgen->getTex());
+
+		g_pEffect9->BeginPass(3);
+		DrawQuad(pd3dDevice);
+		g_pEffect9->EndPass();
+
+		g_pEffect9->End();
+
 		
+#else		
 		g_pEffect9->Begin(NULL, 0);
 		pd3dDevice->SetRenderTarget(0, gRT);
-		pd3dDevice->SetDepthStencilSurface(pDS);
+		pd3dDevice->SetDepthStencilSurface(gDS);
 		
 
+		
+		pd3dDevice->Clear(0, NULL, D3DCLEAR_TARGET|D3DCLEAR_ZBUFFER, D3DCOLOR_ARGB(0, 255, 255, 255),1.0f, 0);
 
-		pd3dDevice->Clear(0, NULL, D3DCLEAR_ZBUFFER, D3DCOLOR_ARGB(0, 45, 50, 170), 1.0f, 0);
 		g_pEffect9->BeginPass(0);
 
-		for(int i=0;i<64;i++)
-			for (int j = 0; j < 64; j++)
-			{
-				D3DXVECTOR3 pos = D3DXVECTOR3((i-32)*4.0f, 1.0f, (j - 32)*4.0f);
-				g_pEffect9->SetRawValue(g_hBias, &pos, 0, sizeof(D3DXVECTOR3));
-				g_pEffect9->CommitChanges();
-				mesh->DrawSubset(0);
-			}
+		for(int i=0;i<64*64;i++)
+		{
+			D3DXVECTOR3 pos = PosArray[i];
+			g_pEffect9->SetRawValue(g_hBias, &pos, 0, sizeof(D3DXVECTOR3));
+			g_pEffect9->CommitChanges();
+			mesh->DrawSubset(0);
+		}
+
 		g_pEffect9->EndPass();
 
 
@@ -452,10 +754,11 @@ void CALLBACK OnD3D9FrameRender( IDirect3DDevice9* pd3dDevice, double fTime, flo
 		g_pEffect9->EndPass();
 
 		g_pEffect9->End();
-
+		
+#endif
 		SAFE_RELEASE(pOldRT);
 		SAFE_RELEASE(pOldDS);
-		SAFE_RELEASE(pDS);
+	
 
         DXUT_BeginPerfEvent( DXUT_PERFEVENTCOLOR, L"HUD / Stats" ); // These events are to help PIX identify what the code is doing
         RenderText();
@@ -538,8 +841,9 @@ void CALLBACK OnD3D9LostDevice( void* pUserContext )
     SAFE_RELEASE( g_pSprite9 );
     SAFE_DELETE( g_pTxtHelper );
 
-	SAFE_RELEASE( shadowMap );
+	SAFE_RELEASE( projMap );
 	SAFE_RELEASE( gRT );
+	SAFE_RELEASE( gDS );
 
 }
 

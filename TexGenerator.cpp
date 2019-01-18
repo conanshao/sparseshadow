@@ -13,6 +13,8 @@ VTGenerator::VTGenerator(IDirect3DDevice9* pD3DDevice)
 
 	InitTex();
 
+	InitPos();
+
 
 	for (int i = 0; i < 1024; i++)
 	{
@@ -20,12 +22,19 @@ VTGenerator::VTGenerator(IDirect3DDevice9* pD3DDevice)
 		TexPagePool.push_back(i);
 	}
 
+	PosArray = new D3DXVECTOR3[64*64];
+	for (int i = 0; i < 64; i++)
+		for (int j = 0; j < 64; j++)
+		{
+			PosArray[i + j * 64] = D3DXVECTOR3((i - 32)*4.0f, 1.0f, (j - 32)*4.0f);
+		}
+
+
 }
 
 
 int VTGenerator::getPageIndex()
 {
-	
 
 	if ( TexPagePool.size() == 0)
 	{
@@ -62,8 +71,8 @@ void VTGenerator::InitTex()
 	D3DXCreateEffectFromFile(pDevice, str, NULL, NULL, dwShaderFlags,
 		NULL, &pTexEffect, NULL);
 
-	g_hmWorldViewProjection = pTexEffect->GetParameterByName(NULL, "g_mShadowVP");
-
+	g_hmShadowViewProj = pTexEffect->GetParameterByName(NULL, "g_mShadowVP");
+	g_hBias = pTexEffect->GetParameterByName(NULL, "biaspos");
 }
 
 
@@ -77,7 +86,7 @@ void VTGenerator::shutdown()
 	SAFE_RELEASE(pNewRT);
 	SAFE_RELEASE(pNewDS);
 
-	SAFE_RELEASE(pDS);
+	SAFE_RELEASE(pRT);
 	
 	SAFE_RELEASE(pOrinRT);
 	SAFE_RELEASE(pOrinDS);
@@ -113,31 +122,58 @@ void VTGenerator::DrawFullScreenQuad()
 
 void VTGenerator::Init()
 {
-	pDevice->CreateTexture(4096, 4096, 1, D3DUSAGE_DEPTHSTENCIL, D3DFMT_D24X8, D3DPOOL_DEFAULT, &TextureCache, NULL);
+	pDevice->CreateTexture(4096, 4096, 1, D3DUSAGE_RENDERTARGET, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &TextureCache, NULL);
 	
-	pDevice->CreateTexture(128, 128, 1, D3DUSAGE_DEPTHSTENCIL, D3DFMT_D24X8, D3DPOOL_DEFAULT, &pDS, NULL);
+	pDevice->CreateTexture(128, 128, 1, D3DUSAGE_RENDERTARGET, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &pRT, NULL);
 
-	pDS->GetSurfaceLevel(0, &pNewDS);
+	pRT->GetSurfaceLevel(0, &pNewRT);
 
-	pDevice->CreateRenderTarget(128, 128, D3DFMT_X8R8G8B8, D3DMULTISAMPLE_NONE, 0, false, &pNewRT, NULL);
+	pDevice->CreateDepthStencilSurface(128, 128, D3DFMT_D24X8, D3DMULTISAMPLE_NONE, 0, true, &pNewDS, NULL);
+
+	D3DXCreateTeapot(pDevice, &mesh, NULL);
+
+	//D3DXCreateBox(pDevice, 2.0f, 2.0f, 2.0f, &mesh, NULL);
 
 	pOrinRT = nullptr;
 	pOrinDS = nullptr;
 }
 
+void VTGenerator::InitPos()
+{
+	m_center = D3DXVECTOR3(0.0f, 0.f, 0.0f);
+
+	m_lightdir = D3DXVECTOR3(1.0f, 1.0f, 0.0f);
+
+	D3DXVec3Normalize(&m_lightdir, &m_lightdir);
+	
+	m_up = D3DXVECTOR3(0.0f, 1.0f, 0.0f);
+	
+	D3DXVec3Cross(&m_left, &m_lightdir, &m_up);
+
+	D3DXVec3Normalize(&m_left, &m_left);
+
+
+	D3DXVec3Cross(&m_up, &m_left, &m_lightdir);
+}
 
 void VTGenerator::Begin()
 {
 	if (pOrinRT == nullptr)
 	{
 		pDevice->GetRenderTarget(0, &pOrinRT);
-		pDevice->GetDepthStencilSurface(&pOrinDS);
+		pDevice->GetDepthStencilSurface(&pOrinDS);		
 	}
 
 	pDevice->SetRenderTarget(0, pNewRT);
 	pDevice->SetDepthStencilSurface(pNewDS);
 
-	pDevice->Clear(0, NULL,  D3DCLEAR_ZBUFFER, D3DCOLOR_ARGB(0, 0, 0, 0), 1.0f, 0);
+	pDevice->Clear(0, NULL,  D3DCLEAR_TARGET|D3DCLEAR_ZBUFFER, D3DCOLOR_ARGB(0, 255, 255, 255), 1.0f, 0);
+}
+
+int VTGenerator::cullArray(D3DXVECTOR3 center, float halfsize)
+{
+
+	return -1;
 }
 
 void VTGenerator::updateTexture(int texpage, int textadr)
@@ -175,12 +211,19 @@ void VTGenerator::updateTexture(int texpage, int textadr)
 
 	mvp = mview * mproj;
 
-	pTexEffect->SetMatrix(g_hmWorldViewProjection, &mvp);
+	pTexEffect->SetMatrix(g_hmShadowViewProj, &mvp);
 
 	pTexEffect->Begin(nullptr, 0);
 	pTexEffect->BeginPass(0);
 
-	DrawFullScreenQuad();
+	for (int i = 0; i < 64 * 64; i++)
+	{
+		D3DXVECTOR3 pos = PosArray[i];
+
+		pTexEffect->SetRawValue(g_hBias, &pos, 0, sizeof(D3DXVECTOR3));
+		pTexEffect->CommitChanges();
+		mesh->DrawSubset(0);
+	}
 
 	pTexEffect->EndPass();
 	pTexEffect->End();
@@ -205,7 +248,7 @@ void VTGenerator::updateTexture(int texpage, int textadr)
 	rect.top = 4096 - 128 - biasy * 128;
 	//rect.top = 128 + biasy * 128;
 		
-	pDevice->StretchRect(pNewDS,NULL, psurf, &rect, D3DTEXF_LINEAR);
+	pDevice->StretchRect(pNewRT,NULL, psurf, &rect, D3DTEXF_NONE);
 	SAFE_RELEASE(psurf);
 		
 }

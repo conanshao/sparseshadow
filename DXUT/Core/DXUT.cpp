@@ -1975,16 +1975,16 @@ HRESULT WINAPI DXUTCreateDevice( bool bWindowed, int nSuggestedWidth, int nSugge
         matchOptions.eVertexProcessing = DXUTMT_PRESERVE_INPUT;
     }
 
-    if( GetDXUTState().GetOverrideForceVsync() == 0 )
+    /*if( GetDXUTState().GetOverrideForceVsync() == 0 )
     {
         deviceSettings.d3d9.pp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
         matchOptions.ePresentInterval = DXUTMT_PRESERVE_INPUT;
     }
     else if( GetDXUTState().GetOverrideForceVsync() == 1 )
-    {
-        deviceSettings.d3d9.pp.PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
+    {*/
+        deviceSettings.d3d9.pp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
         matchOptions.ePresentInterval = DXUTMT_PRESERVE_INPUT;
-    }
+    //}
 
     if( GetDXUTState().GetOverrideForceAPI() != -1 )
     {

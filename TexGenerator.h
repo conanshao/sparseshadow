@@ -8,7 +8,7 @@ class VTGenerator
 private:
 	IDirect3DTexture9* TextureCache;
 
-	IDirect3DTexture9* pDS;
+	IDirect3DTexture9* pRT;
 
 	IDirect3DDevice9* pDevice;
 
@@ -18,12 +18,15 @@ private:
 	IDirect3DSurface9* pNewRT;
 	IDirect3DSurface9* pNewDS;
 
+	IDirect3DSurface9* pTestRT;
+
 private:
 
 	std::list<int> TexPagePool;
 
 	void Init();
 
+	void InitPos();
 
 	void InitTex();
 
@@ -34,20 +37,22 @@ private:
 
 	ID3DXEffect * pTexEffect;
 
-	D3DXHANDLE                  g_hmWorldViewProjection;
-	D3DXHANDLE					g_hTex;
+	D3DXHANDLE                  g_hmShadowViewProj;
+	D3DXHANDLE					g_hBias;
+	
 
 	D3DXVECTOR3				m_center;
 	D3DXVECTOR3				m_lightdir;
 	D3DXVECTOR3				m_up;
 	D3DXVECTOR3				m_left;
 
+	ID3DXMesh*				mesh;
 
+	D3DXVECTOR3* PosArray;
+
+	int cullArray(D3DXVECTOR3 center, float halfsize);
 
 public:
-
-	void beginRender(D3DXMATRIX mat, IDirect3DTexture9* pterraintex);
-	void endRender();
 
 	int getPageIndex();
 	void recycleIndex(int pageindex);
@@ -58,15 +63,9 @@ public:
 
 	void Begin();
 
-	void Begin(IDirect3DTexture9* ptex);
-
 	void updateTexture(int texpage, int texadr);
 
-	void TestupdateTexture(int textadr,IDirect3DTexture9* ptex);
-
 	void End();
-
-	void saveTexture();
 
 	void shutdown();
 
