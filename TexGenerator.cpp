@@ -22,20 +22,15 @@ VTGenerator::VTGenerator(IDirect3DDevice9* pD3DDevice)
 		TexPagePool.push_back(i);
 	}
 
-	PosArray = new D3DXVECTOR3[64*64];
-	for (int i = 0; i < 64; i++)
-		for (int j = 0; j < 64; j++)
-		{
-			PosArray[i + j * 64] = D3DXVECTOR3((i - 32)*8.0f, 1.0f, (j - 32)*8.0f);
-		}
+	
 
 
+	
 }
 
 
 int VTGenerator::getPageIndex()
 {
-
 	if ( TexPagePool.size() == 0)
 	{
 		return -1;
@@ -106,14 +101,51 @@ void VTGenerator::Init()
 
 	D3DXCreateTeapot(pDevice, &mesh, NULL);
 
-	//D3DXCreateBox(pDevice, 2.0f, 2.0f, 2.0f, &mesh, NULL);
+	mesh->GetVertexBuffer(&vb);
+	mesh->GetIndexBuffer(&ib);
+	
+	const D3DVERTEXELEMENT9 g_VBDecl_Geometry[] =
+	{
+		{0,  0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
+		{0, 12, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL,   0},
+		{0, 24, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD,  0},
+		{1, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 1},
+		D3DDECL_END()
+	};
 
+
+
+
+	pDevice->CreateVertexBuffer( sizeof(D3DXVECTOR3) * 64 * 64,  0,  0, D3DPOOL_MANAGED, &instancevb, NULL);
+
+	D3DXVECTOR3* pverts;
+	instancevb->Lock(0, 0, (void**)&pverts, 0);
+	for (int i = 0; i < 64; i++)
+		for (int j = 0; j < 64; j++)
+		{
+			pverts[i + j * 64] = D3DXVECTOR3((i - 32)*8.0f, 1.0f, (j - 32)*8.0f);
+		}
+
+	instancevb->Unlock();
+
+	pDevice->CreateVertexDeclaration(g_VBDecl_Geometry, &pvdcl);
+
+
+	stride = mesh->GetNumBytesPerVertex();
+
+	vertexcount = mesh->GetNumVertices();
+	
+	facecount = mesh->GetNumFaces();
+	
+	//D3DXCreateBox(pDevice, 2.0f, 2.0f, 2.0f, &mesh, NULL);
 	pOrinRT = nullptr;
 	pOrinDS = nullptr;
+
 }
 
 void VTGenerator::InitPos()
 {
+
 	m_center = D3DXVECTOR3(0.0f, 0.f, 0.0f);
 
 	m_lightdir = D3DXVECTOR3(1.0f, 1.0f, 0.0f);
@@ -126,12 +158,13 @@ void VTGenerator::InitPos()
 
 	D3DXVec3Normalize(&m_left, &m_left);
 
-
 	D3DXVec3Cross(&m_up, &m_left, &m_lightdir);
+
 }
 
 void VTGenerator::Begin()
 {
+
 	if (pOrinRT == nullptr)
 	{
 		pDevice->GetRenderTarget(0, &pOrinRT);
@@ -142,17 +175,16 @@ void VTGenerator::Begin()
 	pDevice->SetDepthStencilSurface(pNewDS);
 
 	pDevice->Clear(0, NULL,  D3DCLEAR_TARGET|D3DCLEAR_ZBUFFER, D3DCOLOR_ARGB(0, 255, 255, 255), 1.0f, 0);
+
 }
 
 int VTGenerator::cullArray(D3DXVECTOR3 center, float halfsize)
 {
-
 	return -1;
 }
 
 void VTGenerator::updateTexture(int texpage, int textadr)
 {
-
 	int levelmask = 0xff000000;
 	int level = (textadr&levelmask) >> 24;
 
@@ -162,7 +194,7 @@ void VTGenerator::updateTexture(int texpage, int textadr)
 	int ybias = bias / 4096;
 
 	float basecellsize = 1.0;
-	float texhalfsize = 256.0f;
+	float texhalfsize = 512.0f;
 
 	float levelsize = basecellsize * (1 << level);
 	float halfesize = levelsize / 2.0f;
@@ -188,22 +220,24 @@ void VTGenerator::updateTexture(int texpage, int textadr)
 	pTexEffect->SetMatrix(g_hmShadowViewProj, &mvp);
 
 	pTexEffect->Begin(nullptr, 0);
-	pTexEffect->BeginPass(0);
+	pTexEffect->BeginPass(5);
 
-	for (int i = 0; i < 64 * 64; i++)
-	{
-		D3DXVECTOR3 pos = PosArray[i];
+	pDevice->SetVertexDeclaration(pvdcl);
+	pDevice->SetStreamSource(0, vb, 0, stride);
+	pDevice->SetStreamSourceFreq(0, (D3DSTREAMSOURCE_INDEXEDDATA | 64 * 64));
 
-		pTexEffect->SetRawValue(g_hBias, &pos, 0, sizeof(D3DXVECTOR3));
-		pTexEffect->CommitChanges();
-		mesh->DrawSubset(0);
-	}
+	pDevice->SetStreamSource(1, instancevb, 0, sizeof(D3DXVECTOR3));
+	pDevice->SetStreamSourceFreq(1, D3DSTREAMSOURCE_INSTANCEDATA | 1ul);
+
+	pDevice->SetIndices(ib);
+	
+	pDevice->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, vertexcount, 0, facecount);
+	
 
 	pTexEffect->EndPass();
 	pTexEffect->End();
 	//
 	End();
-
 
 	//stretch texture to the cacheTexture
 	
@@ -216,11 +250,9 @@ void VTGenerator::updateTexture(int texpage, int textadr)
 	RECT rect;
 	rect.left	= 0 + biasx*128;
 	rect.bottom	= 4096 -  biasy * 128;
-	//rect.bottom = 0 + biasy * 128;
-
+	
 	rect.right	= 128 + biasx * 128;
 	rect.top = 4096 - 128 - biasy * 128;
-	//rect.top = 128 + biasy * 128;
 		
 	pDevice->StretchRect(pNewRT,NULL, psurf, &rect, D3DTEXF_NONE);
 	SAFE_RELEASE(psurf);
@@ -235,10 +267,8 @@ IDirect3DTexture9* VTGenerator::getTex()
 
 void VTGenerator::End()
 {
-
 	pDevice->SetRenderTarget(0, pOrinRT);
 	pDevice->SetDepthStencilSurface(pOrinDS);
-
 }
 
 

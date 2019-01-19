@@ -52,6 +52,19 @@ private:
 
 	int cullArray(D3DXVECTOR3 center, float halfsize);
 
+	IDirect3DVertexBuffer9* vb;
+
+	IDirect3DVertexBuffer9* instancevb;
+
+	IDirect3DIndexBuffer9* ib;
+
+	IDirect3DVertexDeclaration9* pvdcl;
+
+	int vertexcount;
+	int facecount;
+
+	int stride;
+
 public:
 
 	int getPageIndex();

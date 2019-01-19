@@ -120,6 +120,25 @@ VS_OUTPUT RenderSceneVS( float4 vPos : POSITION,
 }
 
 
+VS_OUTPUT RenderSceneInstanceVS(float4 vPos : POSITION,
+	float3 vNormal : NORMAL,
+	float2 vTexCoord0 : TEXCOORD0,
+	float3 vTexCoord1 : TEXCOORD1)
+{
+	VS_OUTPUT Output;
+
+	// Transform the position from object space to homogeneous projection space
+	Output.Position = mul(vPos + float4(vTexCoord1, 0.0f), g_mShadowVP);
+	// Just copy the texture coordinate through
+	Output.TextureUV = mul(vPos, g_mShadowVP);
+
+	return Output;
+}
+
+
+
+
+
 //--------------------------------------------------------------------------------------
 // Pixel shader output structure
 //--------------------------------------------------------------------------------------
@@ -320,5 +339,13 @@ technique RenderScene
 		PointScaleEnable = true;
 		VertexShader = compile vs_3_0 RenderPointVS();
 		PixelShader = compile ps_3_0 RenderPointPS();
+	}
+
+	pass P5
+	{
+		//colorwriteenable = 0x0f;
+		zenable = true;
+		VertexShader = compile vs_3_0 RenderSceneInstanceVS();
+		PixelShader = compile ps_3_0 RenderDepthPS();
 	}
 }
