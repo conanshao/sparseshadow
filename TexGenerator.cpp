@@ -193,8 +193,8 @@ void VTGenerator::updateTexture(int texpage, int textadr)
 	int xbias = bias % 4096;
 	int ybias = bias / 4096;
 
-	float basecellsize = 1.0;
-	float texhalfsize = 512.0f;
+	float basecellsize = 0.5f;
+	float texhalfsize = basecellsize * 512.0f;
 
 	float levelsize = basecellsize * (1 << level);
 	float halfesize = levelsize / 2.0f;
@@ -212,6 +212,8 @@ void VTGenerator::updateTexture(int texpage, int textadr)
 	D3DXVECTOR3 vup = m_up;
 
 	D3DXMatrixLookAtLH(&mview, &veye, &vat, &vup);
+
+	float realsize = levelsize * 128.0f / 126.0f;
 
 	D3DXMatrixOrthoLH(&mproj, levelsize, levelsize, 1.0f, 5000.0f);
 

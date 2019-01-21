@@ -252,7 +252,11 @@ PS_OUTPUT RenderFinalPS(VS_OUTPUT In)
 
 	uvbias *= 1.0f / 32.0f;
 
-	float2 uv = frac(In.TextureUV * size) / 32.0f;
+	float2 uv = frac(In.TextureUV * size) ;
+
+	uv = uv * (126.0f / 128.0f) + float2(1 / 128.0f,1 / 128.0f);
+
+	uv /= 32.0f;
 
 	float2 finaluv = uvbias + uv;
 	
