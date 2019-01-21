@@ -69,8 +69,8 @@ sampler_state
 	MipFilter = NONE;
 	MinFilter = LINEAR;
 	MagFilter = LINEAR;
-	addressu = border;
-	addressv = border;
+	addressu = clamp;
+	addressv = clamp;
 	bordercolor = 0xffffffff;
 
 };

@@ -65,6 +65,9 @@ private:
 
 	int stride;
 
+	int texsize;
+	int cachetexsize;
+
 public:
 
 	int getPageIndex();

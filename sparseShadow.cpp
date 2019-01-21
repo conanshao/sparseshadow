@@ -228,7 +228,7 @@ void DrawQuad(IDirect3DDevice9* pDevice)
 		D3DXVECTOR2 uv;
 	};
 
-	float quadsize = 128.0f;
+	float quadsize = 256.0f;
 
 	QuadVertex v[4];
 

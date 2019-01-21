@@ -6,6 +6,9 @@
 
 VTGenerator::VTGenerator(IDirect3DDevice9* pD3DDevice)
 {
+
+	texsize = 128;
+	cachetexsize = 4096;
 	
 	pDevice = pD3DDevice;
 
@@ -91,13 +94,13 @@ void VTGenerator::shutdown()
 
 void VTGenerator::Init()
 {
-	pDevice->CreateTexture(4096, 4096, 1, D3DUSAGE_RENDERTARGET, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &TextureCache, NULL);
+	pDevice->CreateTexture(cachetexsize, cachetexsize, 1, D3DUSAGE_RENDERTARGET, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &TextureCache, NULL);
 	
-	pDevice->CreateTexture(128, 128, 1, D3DUSAGE_RENDERTARGET, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &pRT, NULL);
+	pDevice->CreateTexture(texsize, texsize, 1, D3DUSAGE_RENDERTARGET, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &pRT, NULL);
 
 	pRT->GetSurfaceLevel(0, &pNewRT);
 
-	pDevice->CreateDepthStencilSurface(128, 128, D3DFMT_D24X8, D3DMULTISAMPLE_NONE, 0, true, &pNewDS, NULL);
+	pDevice->CreateDepthStencilSurface(texsize, texsize, D3DFMT_D24X8, D3DMULTISAMPLE_NONE, 0, true, &pNewDS, NULL);
 
 	D3DXCreateTeapot(pDevice, &mesh, NULL);
 
